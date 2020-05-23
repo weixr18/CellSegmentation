@@ -10,7 +10,10 @@
             "request": "launch",
             "program": "D:/Machine_Learning/Codes/CellSegment/src/main.py", //"${file}",
             "console": "integratedTerminal",
-            "args": []
+            "args": [
+                "--mode",
+                "Test"
+            ]
         }
     ]
 }

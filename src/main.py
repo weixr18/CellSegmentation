@@ -13,7 +13,7 @@ def get_args():
 if __name__ == "__main__":
 
     args = get_args()
-    mode = args["mode"]
+    mode = args.mode
 
     if mode == "Train":
         hyper_parameters = {
@@ -44,18 +44,32 @@ if __name__ == "__main__":
         trainer.run()
         trainer.save_module()
 
-    else if mode == "Test":
+    elif mode == "Test":
 
-        modelPath = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200520185855.pth"
+        hyper_parameters = {
+            "batch_size": 2,
+            "threads": 0,
+        }
 
-        unet = UNet(n_channels=1, n_classes=2,)
-        unet.load_state_dict(torch.load(modelPath))
-        if use_gpu:
-            unet = unet.cuda()
+        module_dir = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200520185855.pth"
+        cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train/"
+        mask_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train_GT/SEG"
+        tmp_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/_tmp/_test/"
+        use_cuda = False
 
-        tester = Tester()
-
-        val_loss = get_val_loss(x_val, y_val, width_out, height_out,
-                                unet, batch_size, use_gpu)
+        tester = Tester(
+            module_dir=module_dir,
+            cell_dir=cell_dir,
+            mask_dir=mask_dir,
+            tmp_dir=tmp_dir,
+            hyper_params=hyper_parameters,
+            use_cuda=use_cuda,
+            test_rate=0.1
+        )
+        import time
+        tic = time.time()
+        test_acc = tester.test()
+        toc = time.time()
+        print("test accuracy:", test_acc, "time:", toc-tic)
 
     pass

@@ -1,8 +1,11 @@
+# validate
 import torch
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
+
+SHOW_PIC = False
 
 
 class Validator():
@@ -34,23 +37,25 @@ class Validator():
 
             # get predict
             b_predict_y = self.unet(b_val_x)
-            b_predict_y = b_predict_y.cpu().detach().numpy()
 
             # post process
-            b_predict_y = self.post_process(b_predict_y)
+            if use_cuda:
+                b_predict_y = b_predict_y.cpu().detach().numpy()
+                b_predict_y = self.post_process(b_predict_y)
+                b_predict_y = b_predict_y.cuda()
 
-            # get GT
-            b_gt_y = b_val_y
-
-            if i == 0 and False:
-                self.show_pic(b_val_x[0], b_gt_y[0], b_predict_y[0])
+            if SHOW_PIC and i == 0:
+                b_val_x = b_val_x.cpu().detach().numpy()
+                b_predict_y = b_predict_y.cpu().detach().numpy()
+                self.show_pic(b_val_x[0][0], b_val_y[0], b_predict_y[0])
 
             # calc jaccard score
             for j in range(len(b_predict_y)):
-                j_score = self.calc_jaccard(b_predict_y[j], b_gt_y[j])
+                j_score = self.calc_jaccard(
+                    b_predict_y[j], b_val_y[j], use_cuda=self.use_cuda)
                 j_scores.append(j_score)
 
-        print("j_scores:", np.array(j_scores))
+        # print("j_scores:", np.array(j_scores))
         j_score = np.mean(j_scores)
         return j_score
 
@@ -90,48 +95,66 @@ class Validator():
             predict_y = predict_y.astype(int)
             res.append(predict_y)
 
+        res = torch.Tensor(res)
         return res
 
-    def calc_jaccard(self, imgA, imgB):
+    def calc_jaccard(self, imgA, imgB, use_cuda=True):
         """calculate the jaccard score"""
-        num_A = len(np.unique(imgA))
-        num_B = len(np.unique(imgB))
+        """all this may occur in GPU."""
+
+        unqA = torch.unique(imgA)
+        unqB = torch.unique(imgB)
+
+        num_A = len(unqA)
+        num_B = len(unqB)
 
         if num_A < num_B:
-            i = imgA
-            imgA = imgB
-            imgB = i
+            imgA, imgB = imgB, imgA
+            num_A, num_B = num_B, num_A
+            unqA, unqB = unqB, unqA
 
-        unqA = np.unique(imgA)
-        for i in range(len(unqA)):
+        for i in range(num_A):
             imgA[imgA == unqA[i]] = i
-
-        unqB = np.unique(imgB)
-        for i in range(len(unqB)):
+        for i in range(num_B):
             imgB[imgB == unqB[i]] = i
 
-        hit_matrix = np.zeros([unqA.size, unqB.size])
+        hit_matrix = np.zeros([num_A, num_B])
 
-        for i in range(1, unqA.size):
-            A_chan = (imgA == i)
-            for j in range(1, unqB.size):
-                B_chan = (imgB == j)
-                A_and_B = A_chan * B_chan
-                B_chan[A_chan == 1] = 1
-                hit_matrix[i, j] = np.sum(A_and_B) / np.sum(B_chan)
+        if use_cuda:
+            for i in range(2, num_A):
+                A_chan = (imgA == i).cuda()
+                for j in range(1, num_B):
+                    B_chan = (imgB == j).cuda()
+                    A_and_B = torch.mul(A_chan, B_chan)
+                    B_chan[A_chan == 1] = 1
+                    hit_matrix[i, j] = torch.sum(
+                        A_and_B).float() / torch.sum(B_chan).float()
+        else:
+            for i in range(2, num_A):
+                A_chan = (imgA == i)
+                for j in range(1, num_B):
+                    B_chan = (imgB == j)
+                    A_and_B = torch.mul(A_chan, B_chan)
+                    B_chan[A_chan == 1] = 1
+                    hit_matrix[i, j] = torch.sum(
+                        A_and_B).float() / torch.sum(B_chan).float()
 
         jaccard_list = []
-        for j in range(1, unqB.size):
+        for j in range(1, num_B):
             jac_col = np.max(hit_matrix[:, j])
             jaccard_list.append(jac_col)
 
         j_score = np.sum(jaccard_list) / max(num_A, num_B)
         return j_score
 
-    def show_pic(self, picA, picB, picC):
+    def show_pic(self, picA, picB, picC=None,
+                 A_gray=True):
         plt.subplot(1, 3, 1)
         plt.title("x")
-        plt.imshow(picA, cmap='gray')
+        if A_gray:
+            plt.imshow(picA, cmap='gray')
+        else:
+            plt.imshow(picA)
 
         plt.subplot(1, 3, 2)
         plt.title("GT")
