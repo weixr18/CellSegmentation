@@ -32,7 +32,6 @@ def get_val_loss(x_val, y_val, width_out, height_out,
     print("predict_ys.shape", predict_ys.shape)
     predict_ys = np.reshape(
         predict_ys, (shape[0]*shape[1], shape[2], shape[3], shape[4]))
-
     # post process
     predict_ys = post_process(predict_ys)
 
@@ -42,27 +41,11 @@ def get_val_loss(x_val, y_val, width_out, height_out,
     if i == 0 and False:
         show_pic(x_val[0], gt_ys[0], predict_ys[0])
 
-    import time
-
-    tic = time.time()
     # calc jaccard score
     for j in range(len(predict_ys)):
         j_score = calc_jaccard(predict_ys[j], gt_ys[j])
         j_scores.append(j_score)
-    toc = time.time()
     print("j_scores:", np.array(j_scores))
-
-    """
-    j_scores_fast = []
-    tic = time.time()
-    # calc jaccard score
-    for j in range(len(predict_ys)):
-        j_score = jaccard_fast(predict_ys[j], gt_ys[j])
-        j_scores_fast.append(j_score)
-    toc = time.time()
-    print("j_fast:", np.array(j_scores_fast))
-    """
-
     j_score = np.mean(j_scores)
     return j_score
 
@@ -137,11 +120,6 @@ def calc_jaccard(imgA, imgB):
 
     j_score = np.sum(jaccard_list) / max(num_A, num_B)
     return j_score
-
-
-def jaccard_fast(imgA, imgB):
-    j_fast = scipy.spatial.distance.jaccard(imgA.flatten(), imgB.flatten())
-    return j_fast
 
 
 def show_pic(picA, picB, picC):

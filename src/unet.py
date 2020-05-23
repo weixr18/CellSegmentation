@@ -72,7 +72,7 @@ class OutConv(nn.Module):
     def forward(self, x):
         """softmax"""
         x = self.conv(x)
-        x = F.softmax(x)
+        # x = F.softmax(x, dim=1)
         return x
 
 

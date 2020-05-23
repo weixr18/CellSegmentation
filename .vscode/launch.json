@@ -5,21 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: 当前文件",
+            "name": "Python: main",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            "program": "D:/Machine_Learning/Codes/CellSegment/src/main.py", //"${file}",
             "console": "integratedTerminal",
-            "args": [
-                /*
-                "--model_path",
-                "D:/Codes/_Projects/Covid/OCD_Slicer_Plugin/OpenCOVID_Detecter/model/classify_model.pt",
-                "--mask_path",
-                "D:/Codes/_Projects/Covid/OCD_Slicer_Plugin/Example/examples/seg/99_1-21.nii",
-                "--image_path",
-                "D:/Codes/_Projects/Covid/OCD_Slicer_Plugin/Example/examples/data/99_1-21.nii",
-                */
-            ]
+            "args": []
         }
     ]
 }

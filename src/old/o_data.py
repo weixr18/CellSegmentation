@@ -37,7 +37,11 @@ def load_images(file_names):
     images = []
     for file_name in file_names:
         img = cv2.imread(file_name, -1)
-        img = img_standardization(img)
+        if img.dtype == 'uint16':
+            img = img.astype(np.uint8)
+        else:
+            raise TypeError(
+                'No such of img transfer type: {} for img'.format(img.dtype))
         images.append(img)
     images = np.array(images)
     return images

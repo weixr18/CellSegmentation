@@ -10,12 +10,14 @@ from torch.utils.data import Dataset, DataLoader
 
 
 def load_file(filename):
-    # TODO: 根据filename读出PIL格式的图像
-    pass
+    # TODO: 根据filename读出图像
+    img = cv2.imread(filename, -1)
+    img = img.astype(np.float32)
+    return img
 
 
 class CellDataset(Dataset):
-    def __init__(self, txtpath, transform, dataloader):
+    def __init__(self, txtpath, transform=None, data_reader=None):
         super(CellDataset, self).__init__()
 
         data_paths = []
@@ -24,18 +26,18 @@ class CellDataset(Dataset):
                 line = line.strip('\n')
                 line = line.rstrip('\n')
                 words = line.split()    # 0和1分别是cell和mask路径
-                data_paths.append(words[0], words[1])
+                data_paths.append((words[0], words[1]))
 
         self.data_paths = data_paths
         self.transform = transform
-        self.dataloader = dataloader
+        self.data_reader = data_reader
         pass
 
     def __getitem__(self, index):
 
         cell_path, mask_path = self.data_paths[index]
-        cell = self.loader(cell_path)
-        mask = self.loader(mask_path)
+        cell = self.data_reader(cell_path)
+        mask = self.data_reader(mask_path)
         if self.transform is not None:
             cell, mask = self.transform(cell, mask)
         return cell, mask
@@ -44,19 +46,41 @@ class CellDataset(Dataset):
         return len(self.data_paths)
 
 
-def get_dataset(data_dir, mask_dir, valid_rate):
+def get_dataset(cell_dir, mask_dir, valid_rate, tmp_dir, use_exist=True):
 
-    # TODO:
-    # 1. 生成data_dir的文件列表data_file_list
-    # 2. 根据valid_rate把data_file_list分为两部分
-    # 3. 将train_list存成"train_data.txt"
-    # 4. 将valid_list存成"valid_data.txt"
-    # 5. 分别获取两个dataset
+    valid_txt = tmp_dir + "valid_data.txt"
+    train_txt = tmp_dir + "train_data.txt"
 
-    train_data_txt = ""
-    valid_data_txt = ""
+    use_exist = use_exist and os.path.isfile(
+        valid_txt) and os.path.isfile(train_txt)
 
-    train_dataset = CellDataset(train_data_txt)
-    valid_dataset = CellDataset(valid_data_txt)
+    if not use_exist:
+        # generate list of file names
+        cell_list = [os.path.join(cell_dir, image)
+                     for image in os.listdir(cell_dir)]
+        mask_list = [os.path.join(mask_dir, image)
+                     for image in os.listdir(mask_dir)]
+
+        # separate the lists according to valid_rate
+        sample_size = len(cell_list)
+        valid_size = int(sample_size * valid_rate)
+        valid_index = np.random.choice(
+            a=sample_size, size=valid_size, replace=False, p=None)
+
+        # save the lists in txt files
+
+        with open(valid_txt, "a+") as f:
+            for i in valid_index:
+                f.write(cell_list[i] + " " + mask_list[i] + '\n')
+
+        with open(train_txt, "a+") as f:
+            for i in range(sample_size):
+                if i not in valid_index:
+                    f.write(cell_list[i] + " " + mask_list[i] + '\n')
+
+    # get the Dataset objects
+
+    train_dataset = CellDataset(train_txt, data_reader=load_file)
+    valid_dataset = CellDataset(valid_txt, data_reader=load_file)
 
     return train_dataset, valid_dataset
