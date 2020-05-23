@@ -8,17 +8,32 @@ import torch
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
+from PIL import Image
+
+"""
+flip
+rotation
+zoom
+shift
+fill_mode=reflect
+"""
+
+data_transforms = transforms.Compose([
+    transforms.RandomVerticalFlip(),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+])
 
 
 def load_file(filename):
-    # TODO: 根据filename读出图像
     img = cv2.imread(filename, -1)
     img = img.astype(np.float32)
     return img
 
 
 class CellDataset(Dataset):
-    def __init__(self, txtpath, transform=None, data_reader=None):
+    def __init__(self, txtpath, transform=data_transforms, data_reader=None):
         super(CellDataset, self).__init__()
 
         data_paths = []
@@ -39,8 +54,18 @@ class CellDataset(Dataset):
         cell_path, mask_path = self.data_paths[index]
         cell = self.data_reader(cell_path)
         mask = self.data_reader(mask_path)
+
+        # Normalization
+        cell = cell - cell.min()
+        cell = cell / cell.max() * 255
+
         if self.transform is not None:
-            cell, mask = self.transform(cell, mask)
+            img = np.uint8([cell, mask, mask]).transpose(1, 2, 0)
+            img = Image.fromarray(img)
+            img = self.transform(img)
+            cell = img[0]
+            mask = img[1] * 255
+
         return cell, mask
 
     def __len__(self):
@@ -69,7 +94,6 @@ def get_dataset(cell_dir, mask_dir, valid_rate, tmp_dir, use_exist=True):
             a=sample_size, size=valid_size, replace=False, p=None)
 
         # save the lists in txt files
-
         with open(valid_txt, "a+") as f:
             for i in valid_index:
                 f.write(cell_list[i] + " " + mask_list[i] + '\n')
@@ -80,7 +104,6 @@ def get_dataset(cell_dir, mask_dir, valid_rate, tmp_dir, use_exist=True):
                     f.write(cell_list[i] + " " + mask_list[i] + '\n')
 
     # get the Dataset objects
-
     train_dataset = CellDataset(train_txt, data_reader=load_file)
     valid_dataset = CellDataset(valid_txt, data_reader=load_file)
 

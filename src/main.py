@@ -1,6 +1,6 @@
 import argparse
-from train import Trainer
-from test import Tester
+from S1.s1_train import Trainer
+from S1.s1_test import Tester
 
 
 def get_args():
@@ -19,14 +19,15 @@ if __name__ == "__main__":
         hyper_parameters = {
             "batch_size": 2,
             "learning_rate": 1e-4,
-            "threads": 2,
+            "threads": 0,
             "epochs": 1,
             "epoch_lapse": 1,
+            "epoch_save": 50,
         }
 
         cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train/"
-        mask_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train_GT/SEG"
-        module_save_dir = "D:/Machine_Learning/Codes/CellSegment/save"
+        mask_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train_GT/SEG/"
+        module_save_dir = "D:/Machine_Learning/Codes/CellSegment/save/"
         tmp_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/_tmp/"
 
         valid_rate = 0.1
@@ -41,35 +42,44 @@ if __name__ == "__main__":
                       hyper_params=hyper_parameters,
                       use_cuda=use_cuda)
 
-        trainer.run()
+        trainer.train()
         trainer.save_module()
 
     elif mode == "Test":
 
         hyper_parameters = {
-            "batch_size": 2,
+            "batch_size": 1,
             "threads": 0,
         }
 
-        module_dir = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200520185855.pth"
         cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train/"
-        mask_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train_GT/SEG"
+        mask_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train_GT/SEG/"
         tmp_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/_tmp/_test/"
-        use_cuda = False
+        use_cuda = True
 
-        tester = Tester(
-            module_dir=module_dir,
-            cell_dir=cell_dir,
-            mask_dir=mask_dir,
-            tmp_dir=tmp_dir,
-            hyper_params=hyper_parameters,
-            use_cuda=use_cuda,
-            test_rate=0.1
-        )
-        import time
-        tic = time.time()
-        test_acc = tester.test()
-        toc = time.time()
-        print("test accuracy:", test_acc, "time:", toc-tic)
+        for e in range(500, 550, 50):
+
+            module_path = "D:/Machine_Learning/Codes/CellSegment/save/"\
+                + "unet-20200523epoch-%d.pth" % (e)
+            SHOW_PIC = True
+
+            tester = Tester(
+                module_path=module_path,
+                cell_dir=cell_dir,
+                mask_dir=mask_dir,
+                tmp_dir=tmp_dir,
+                hyper_params=hyper_parameters,
+                use_cuda=use_cuda,
+                use_exist=True,
+                test_rate=0.1,
+            )
+            import time
+            tic = time.time()
+            test_acc = tester.test(SHOW_PIC=SHOW_PIC)
+            toc = time.time()
+            print("epoch:", e, "test accuracy:", test_acc, "time:", toc - tic)
+
+    elif mode == "Predict":
+        pass
 
     pass

@@ -5,8 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy
 
-SHOW_PIC = False
-
 
 class Validator():
 
@@ -20,7 +18,7 @@ class Validator():
         self.data_loader = data_loader
         pass
 
-    def validate(self):
+    def validate(self, SHOW_PIC=False):
         width_out = 628
         height_out = 628
         batch_size = self.hyper_params["batch_size"]
@@ -44,23 +42,24 @@ class Validator():
                 b_predict_y = self.post_process(b_predict_y)
                 b_predict_y = b_predict_y.cuda()
 
-            if SHOW_PIC and i == 0:
-                b_val_x = b_val_x.cpu().detach().numpy()
-                b_predict_y = b_predict_y.cpu().detach().numpy()
-                self.show_pic(b_val_x[0][0], b_val_y[0], b_predict_y[0])
-
             # calc jaccard score
             for j in range(len(b_predict_y)):
                 j_score = self.calc_jaccard(
                     b_predict_y[j], b_val_y[j], use_cuda=self.use_cuda)
                 j_scores.append(j_score)
 
-        # print("j_scores:", np.array(j_scores))
+                if SHOW_PIC and j_score < 0.5:
+                    b_val_x = b_val_x.cpu().detach().numpy()
+                    b_predict_y = b_predict_y.cpu().detach().numpy()
+                    self.show_pic(b_val_x[j][0], b_val_y[j], b_predict_y[j],
+                                  comment=("pic_num: %d, j_score: %f\n" % (i, j_score)))
+
+        print("j_scores_final:", np.array(j_scores))
         j_score = np.mean(j_scores)
         return j_score
 
-    def post_process(self, batch_predict_y):
-        """post process of the result"""
+    def post_process(self, batch_predict_y, KERNEL_SIZE=(6, 6)):
+        """Post process the result."""
         # shape: [batch_size, 2, width, height]
 
         batch_predict_y = batch_predict_y[:, 1, :, :]
@@ -72,7 +71,7 @@ class Validator():
             predict_y[predict_y <= 0] = 0
 
             # open
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, KERNEL_SIZE)
             predict_y = cv2.erode(predict_y, kernel)  # 腐蚀
             predict_y = cv2.dilate(predict_y, kernel)  # 膨胀
 
@@ -99,12 +98,11 @@ class Validator():
         return res
 
     def calc_jaccard(self, imgA, imgB, use_cuda=True):
-        """calculate the jaccard score"""
-        """all this may occur in GPU."""
+        """Calculate the jaccard score"""
+        """All this may occur in GPU."""
 
         unqA = torch.unique(imgA)
         unqB = torch.unique(imgB)
-
         num_A = len(unqA)
         num_B = len(unqB)
 
@@ -142,13 +140,16 @@ class Validator():
         jaccard_list = []
         for j in range(1, num_B):
             jac_col = np.max(hit_matrix[:, j])
-            jaccard_list.append(jac_col)
+            if jac_col > 0.5:
+                jaccard_list.append(jac_col)
+            else:
+                jaccard_list.append(0)
 
         j_score = np.sum(jaccard_list) / max(num_A, num_B)
         return j_score
 
     def show_pic(self, picA, picB, picC=None,
-                 A_gray=True):
+                 A_gray=True, comment=""):
         plt.subplot(1, 3, 1)
         plt.title("x")
         if A_gray:
@@ -164,5 +165,8 @@ class Validator():
             plt.subplot(1, 3, 3)
             plt.title("Predict")
             plt.imshow(picC)
+
+        if comment is not "":
+            plt.text(0, 1, comment, fontsize=14)
 
         plt.show()

@@ -10,9 +10,10 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+
 from unet import UNet
-from data import get_dataset
-from validate import Validator
+from s1_data import get_dataset
+from s1_validate import Validator
 
 SHOW_NET = False
 
@@ -62,11 +63,12 @@ class Trainer():
                            use_cuda=use_cuda,
                            data_loader=self.valid_data_loader)
 
-    def run(self):
+    def train(self):
         """train the model"""
         epochs = self.hyper_params["epochs"]
         epoch_lapse = self.hyper_params["epoch_lapse"]
         batch_size = self.hyper_params["batch_size"]
+        epoch_save = self.hyper_params["epoch_save"]
         width_out = 628
         height_out = 628
 
@@ -96,10 +98,15 @@ class Trainer():
                     batch_size=batch_size)
 
                 total_loss += batch_loss
+
             if (_+1) % epoch_lapse == 0:
                 val_acc = self.v.validate()
-                print("Total loss in epoch %f : %f and validation accuracy : %f" %
-                      (_+1, total_loss, val_acc))
+                print("Total loss in epoch %d : %f and validation accuracy : %f" %
+                      (_ + 1, total_loss, val_acc))
+
+            if (_+1) % epoch_save == 0:
+                self.save_module(name_else="epoch-" + str(_ + 1))
+                print("MODULE SAVED.")
         gc.collect()
         pass
 
@@ -118,8 +125,10 @@ class Trainer():
         optimizer.step()
         return loss
 
-    def save_module(self):
+    def save_module(self, name_else=""):
+        import datetime
         module_save_dir = self.module_save_dir
-        filename = 'unet-' + datetime.datetime.now().strftime('%Y%m%d%H%M%S') + '.pth'
+        filename = 'unet-' + datetime.datetime.now().strftime('%Y%m%d%H%M%S') + \
+            name_else + '.pth'
         torch.save(self.unet.state_dict(), module_save_dir + filename)
         pass
