@@ -22,6 +22,7 @@ fill_mode=reflect
 data_transforms = transforms.Compose([
     transforms.RandomVerticalFlip(),
     transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(90),
     transforms.ToTensor(),
 ])
 
@@ -30,6 +31,29 @@ def load_file(filename):
     img = cv2.imread(filename, -1)
     img = img.astype(np.float32)
     return img
+
+
+class TestSet(Dataset):
+    def __init__(self, cell_dir, data_reader=load_file):
+
+        super(TestSet, self).__init__()
+        self.data_paths = os.listdir(filePath)
+        self.data_reader = data_reader
+        pass
+
+    def __getitem__(self, index):
+        cell_path = self.data_paths[index]
+        cell = self.data_reader(cell_path)
+
+        # Normalization
+        cell = cell - cell.min()
+        cell = cell / cell.max() * 255
+        return cell
+
+    def __len__(self):
+        return len(self.data_paths)
+
+    pass
 
 
 class CellDataset(Dataset):
