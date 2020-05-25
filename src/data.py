@@ -37,7 +37,11 @@ class TestSet(Dataset):
     def __init__(self, cell_dir, data_reader=load_file):
 
         super(TestSet, self).__init__()
-        self.data_paths = os.listdir(filePath)
+        data_paths = os.listdir(cell_dir)
+        self.data_paths = []
+        for p in data_paths:
+            self.data_paths.append(cell_dir + p)
+
         self.data_reader = data_reader
         pass
 

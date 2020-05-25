@@ -91,9 +91,9 @@ if __name__ == "__main__":
             "batch_size": 1,
             "threads": 0,
         }
-        cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/_demo"
-        module_path = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200523epoch-20.pth"
-        save_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/test_RES"
+        cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/test/"
+        module_path = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200523epoch-200.pth"
+        save_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/test_RES/"
         use_cuda = True
         TTA = True
 

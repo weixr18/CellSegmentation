@@ -1,4 +1,8 @@
+import imageio
+import os
+
 import cv2
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -16,11 +20,11 @@ class Predictor():
                  hyper_params, use_cuda):
 
         self.test_set = TestSet(cell_dir)
-        print("test number:", len(self.dataset))
+        print("test number:", len(self.test_set))
 
         self.hyper_params = hyper_params
         self.data_loader = DataLoader(
-            dataset=self.dataset,
+            dataset=self.test_set,
             num_workers=self.hyper_params["threads"],
             batch_size=self.hyper_params["batch_size"],
             shuffle=False
@@ -32,8 +36,7 @@ class Predictor():
         self.unet.load_state_dict(torch.load(module_path))
         if use_cuda:
             self.unet = self.unet.cuda()
-
-    pass
+        pass
 
     def predict(self, TTA=True):
 
@@ -43,10 +46,7 @@ class Predictor():
         use_cuda = self.use_cuda
 
         predict_ys = []
-        for i, data in enumerate(self.data_loader):
-
-            """preprocess"""
-            b_val_x, b_val_y = data
+        for i, b_val_x in enumerate(self.data_loader):
 
             """Test time augmentation"""
             # S b_val_x: [batch_size, width, height]
@@ -92,7 +92,8 @@ class Predictor():
 
                 """binarization"""
                 # S b_predict_y: [batch_size, 2, width, height]
-                b_predict_y_cpu = self.binarization(b_predict_y).detach().cpu()
+                b_predict_y_cpu = self.binarization(
+                    b_predict_y).detach().cpu()
 
                 # S b_predict_y: [batch_size, width, height]
                 b_y_list_cpu.append(b_predict_y_cpu)
@@ -104,11 +105,15 @@ class Predictor():
                 # S b_y_list_cpu[n]: [batch_size, width, height]
                 b_y_list_cpu[1] = torch.flip(b_y_list_cpu[1], dims=[1])
                 b_y_list_cpu[2] = torch.flip(b_y_list_cpu[2], dims=[2])
-                b_y_list_cpu[3] = torch.rot90(b_y_list_cpu[3], 3, dims=(1, 2))
-                b_y_list_cpu[4] = torch.rot90(b_y_list_cpu[4], 2, dims=(1, 2))
-                b_y_list_cpu[5] = torch.rot90(b_y_list_cpu[5], 1, dims=(1, 2))
+                b_y_list_cpu[3] = torch.rot90(
+                    b_y_list_cpu[3], 3, dims=(1, 2))
+                b_y_list_cpu[4] = torch.rot90(
+                    b_y_list_cpu[4], 2, dims=(1, 2))
+                b_y_list_cpu[5] = torch.rot90(
+                    b_y_list_cpu[5], 1, dims=(1, 2))
 
-                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 10))
+                kernel = cv2.getStructuringElement(
+                    cv2.MORPH_RECT, (10, 10))
 
                 """Open operation"""
                 for n in range(6):
@@ -141,14 +146,21 @@ class Predictor():
                 y = y.detach().cpu()
                 predict_ys.append(y)
 
+            print("Batch %d done." % i)
             pass
 
         self.save_pics(predict_ys)
+        print("Files saved.")
         pass
 
     def save_pics(self, predict_ys):
 
         save_dir = self.save_dir
+        for i, y in enumerate(predict_ys):
+            if isinstance(y, torch.Tensor):
+                y = y.numpy()
+            full_path = os.path.join(save_dir, 'mask{:0>3d}.tif'.format(i))
+            imageio.imwrite(full_path, y.astype(np.uint16))
         pass
 
     def binarization(self, batch_predict_y):
