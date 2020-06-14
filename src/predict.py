@@ -1,13 +1,15 @@
 import imageio
 import os
+import zipfile
 
 import cv2
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
 
 from unet import UNet
-from data import TestSet
+from data import PredictSet
 from validate import Validator
 
 
@@ -16,10 +18,10 @@ SHOW_PIC = True
 
 class Predictor():
 
-    def __init__(self, module_path, cell_dir, save_dir,
+    def __init__(self, model_path, cell_dir, save_dir,
                  hyper_params, use_cuda):
 
-        self.test_set = TestSet(cell_dir)
+        self.test_set = PredictSet(cell_dir)
         print("test number:", len(self.test_set))
 
         self.hyper_params = hyper_params
@@ -30,10 +32,11 @@ class Predictor():
             shuffle=False
         )
         self.save_dir = save_dir
+        self.model_path = model_path
         self.use_cuda = use_cuda
 
         self.unet = UNet(n_channels=1, n_classes=2,)
-        self.unet.load_state_dict(torch.load(module_path))
+        self.unet.load_state_dict(torch.load(model_path))
         if use_cuda:
             self.unet = self.unet.cuda()
         pass
@@ -42,6 +45,12 @@ class Predictor():
 
         width_out = 628
         height_out = 628
+
+        TTA_KERNEL_SIZE = self.hyper_params["TTA_KERNEL_SIZE"]
+        BG_KERNEL_SIZE = self.hyper_params["BG_KERNEL_SIZE"]
+        DILATE_ITERATIONS = self.hyper_params["DILATE_ITERATIONS"]
+        BIN_THRESHOLD = self.hyper_params["BIN_THRESHOLD"]
+
         batch_size = self.hyper_params["batch_size"]
         use_cuda = self.use_cuda
 
@@ -93,7 +102,9 @@ class Predictor():
                 """binarization"""
                 # S b_predict_y: [batch_size, 2, width, height]
                 b_predict_y_cpu = self.binarization(
-                    b_predict_y).detach().cpu()
+                    batch_predict_y=b_predict_y,
+                    BIN_THRESHOLD=BIN_THRESHOLD
+                ).detach().cpu()
 
                 # S b_predict_y: [batch_size, width, height]
                 b_y_list_cpu.append(b_predict_y_cpu)
@@ -113,7 +124,7 @@ class Predictor():
                     b_y_list_cpu[5], 1, dims=(1, 2))
 
                 kernel = cv2.getStructuringElement(
-                    cv2.MORPH_RECT, (10, 10))
+                    cv2.MORPH_RECT, TTA_KERNEL_SIZE)
 
                 """Open operation"""
                 for n in range(6):
@@ -140,7 +151,9 @@ class Predictor():
 
             """Instance Sparse"""
             # S b_predict_y: [batch_size, width, height]
-            b_predict_y = self.instance_sparse(b_predict_y)
+            b_predict_y = self.instance_sparse(b_predict_y,
+                                               BG_KERNEL_SIZE=BG_KERNEL_SIZE,
+                                               DILATE_ITERATIONS=DILATE_ITERATIONS)
 
             for y in b_predict_y:
                 y = y.detach().cpu()
@@ -160,16 +173,35 @@ class Predictor():
             if isinstance(y, torch.Tensor):
                 y = y.numpy()
             full_path = os.path.join(save_dir, 'mask{:0>3d}.tif'.format(i))
+            if os.path.exists(full_path):
+                os.remove(full_path)
             imageio.imwrite(full_path, y.astype(np.uint16))
+
+        zip_name = "dataset1_" + self.model_path.split("/")[-1].split(".")[-2]
+        zip_name = save_dir + "../" + zip_name
+
+        def make_zip(source_dir, output_filename):
+            zipf = zipfile.ZipFile(output_filename, 'w')
+            pre_len = len(os.path.dirname(source_dir))
+            for parent, dirnames, filenames in os.walk(source_dir):
+                for filename in filenames:
+                    pathfile = os.path.join(parent, filename)
+                    arcname = pathfile[pre_len:].strip(
+                        os.path.sep)  # 相对路径
+                    zipf.write(pathfile, arcname)
+            zipf.close()
+
+        # make_zip(save_dir, zip_name)
+
         pass
 
-    def binarization(self, batch_predict_y):
+    def binarization(self, batch_predict_y, BIN_THRESHOLD=0.6):
         # S b_predict_y: [batch_size, 2, width, height]
 
         # sqeeze
         batch_predict_y_1 = torch.softmax(batch_predict_y, dim=1)
         batch_predict_y_1 = batch_predict_y_1[:, 1, :, :]
-        THRESHOLD_1 = 0.5
+        THRESHOLD_1 = BIN_THRESHOLD
         batch_predict_y_1[batch_predict_y_1 > THRESHOLD_1] = 1
         batch_predict_y_1[batch_predict_y_1 <= THRESHOLD_1] = 0
 
@@ -178,31 +210,46 @@ class Predictor():
 
         return batch_predict_y
 
-    def instance_sparse(self, batch_predict_y, KERNEL_SIZE=(6, 6)):
+    def instance_sparse(self, batch_predict_y,
+                        BG_KERNEL_SIZE=(8, 8),
+                        DILATE_ITERATIONS=10):
         """Post process the result."""
-        # TODO: use the watershed algorithm.
-
         # shape: [batch_size, width, height]
 
         res = []
         for predict_y in batch_predict_y:
 
             predict_y = predict_y.numpy().astype(np.uint8) * 255
-            if cv2.__version__[0] == '3':
-                __, contours, _ = cv2.findContours(
-                    predict_y, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)  # 寻找连通域
-            elif cv2.__version__[0] == '4':
-                contours, _ = cv2.findContours(
-                    predict_y, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)  # 寻找连通域
+            predict_y_old = predict_y.copy()
 
-            areas = [cv2.contourArea(cnt) for cnt in contours]
-            cellIndexs = np.argsort(areas)
+            # sure background area
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, BG_KERNEL_SIZE)
+            sure_bg = cv2.dilate(
+                predict_y, kernel, iterations=DILATE_ITERATIONS)
 
-            predict_y = np.zeros([predict_y.shape[0], predict_y.shape[1]])
-            for j in range(len(cellIndexs)):
-                cv2.drawContours(predict_y, contours, j, j, cv2.FILLED)
+            # Finding sure foreground area
+            dist_transform = cv2.distanceTransform(predict_y, cv2.DIST_L2, 5)
+            ret, sure_fg = cv2.threshold(
+                dist_transform, 0.45*dist_transform.max(), 255, 0)
 
-            predict_y = predict_y.astype(int)
+            # Finding unknown region
+            sure_fg = np.uint8(sure_fg)
+            unknown = cv2.subtract(sure_bg, sure_fg)
+
+            # Marker labelling
+            ret, markers = cv2.connectedComponents(sure_fg)
+            # Change background to 1
+            markers = markers + 1
+            # Mark the region of unknown with zero
+            markers[unknown == 255] = 0
+
+            # watershed
+            predict_y_color = cv2.cvtColor(predict_y, cv2.COLOR_GRAY2BGR)
+            markers = cv2.watershed(predict_y_color, markers)
+            markers[markers == -1] = 1
+            markers = markers - 1
+
+            predict_y = markers.astype(int)
             res.append(predict_y)
 
         res = torch.Tensor(res)
