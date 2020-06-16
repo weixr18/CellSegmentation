@@ -4,7 +4,6 @@ import gc
 
 import cv2
 import numpy as np
-import scipy
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch
@@ -22,13 +21,14 @@ class Trainer():
     def __init__(self):
         pass
 
-    def setup(self, valid_rate=0.1, use_cuda=True,
+    def setup(self, valid_rate=0.1, use_cuda=True, model_path="", use_exist_dataset=False,
               cell_dir="", mask_dir="", module_save_dir="", tmp_dir="",
               criterion=None, optimizer=None, hyper_params=None,
+              FREEZE_PARAM=False, PRETRAINED=False
               ):
         """setup the module"""
         self.train_dataset, self.valid_dataset = get_dataset(
-            cell_dir, mask_dir, valid_rate, tmp_dir)
+            cell_dir, mask_dir, valid_rate, tmp_dir, use_exist_dataset)
 
         self.hyper_params = hyper_params
         self.train_data_loader = DataLoader(
@@ -46,22 +46,44 @@ class Trainer():
 
         self.use_cuda = use_cuda
         self.unet = UNet(n_channels=1, n_classes=2,)
+        if PRETRAINED:
+            self.unet.load_state_dict(torch.load(model_path))
+
         if use_cuda:
             self.unet = self.unet.cuda()
         if SHOW_NET:
             from torchsummary import summary
             batch_size = self.hyper_params["batch_size"]
-            summary(self.unet, (batch_size, 628, 628))
+            summary(self.unet, (batch_size, 500, 500))
+
+        # freeze parameters
+        if FREEZE_PARAM:
+            freeze_layers = [
+                self.unet.down1,
+                self.unet.down2,
+            ]
+            for l in freeze_layers:
+                for child in l.children():
+                    for param in child.parameters():
+                        param.requires_grad = False
+
+            self.optimizer = torch.optim.SGD(
+                filter(lambda p: p.requires_grad, self.unet.parameters()),
+                lr=self.hyper_params["learning_rate"],
+                momentum=0.99)
+        else:
+            self.optimizer = torch.optim.SGD(
+                self.unet.parameters(), lr=self.hyper_params["learning_rate"], momentum=0.99)
 
         self.criterion = torch.nn.CrossEntropyLoss()
-        self.optimizer = torch.optim.SGD(
-            self.unet.parameters(), lr=self.hyper_params["learning_rate"], momentum=0.99)
         self.module_save_dir = module_save_dir
-
         self.v = Validator(unet=self.unet,
                            hyper_params=hyper_params,
                            use_cuda=use_cuda,
-                           data_loader=self.valid_data_loader)
+                           data_loader=self.valid_data_loader,
+                           USE_EXIST_RES=False,
+                           exist_res_dir="")
+        pass
 
     def train(self):
         """train the model"""
@@ -69,8 +91,7 @@ class Trainer():
         epoch_lapse = self.hyper_params["epoch_lapse"]
         batch_size = self.hyper_params["batch_size"]
         epoch_save = self.hyper_params["epoch_save"]
-        width_out = 628
-        height_out = 628
+        width_out, height_out = self.hyper_params["input_size"]
 
         for _ in range(epochs):
             total_loss = 0
@@ -105,7 +126,7 @@ class Trainer():
                       (_ + 1, total_loss, val_acc))
 
             if (_+1) % epoch_save == 0:
-                self.save_module(name_else="epoch-" + str(_ + 1))
+                self.save_module(name_else="epoch-" + str(_ + 1 + 240))
                 print("MODULE SAVED.")
         gc.collect()
         pass

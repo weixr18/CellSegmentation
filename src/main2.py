@@ -20,30 +20,41 @@ if __name__ == "__main__":
 
     if mode == "Train":
         hyper_parameters = {
-            "batch_size": 2,
+            "batch_size": 1,
             "learning_rate": 1e-4,
             "threads": 0,
-            "epochs": 1,
-            "epoch_lapse": 1,
-            "epoch_save": 50,
+            "epochs": 2000,
+            "epoch_lapse": 100000,
+            "epoch_save": 40,
+            "TTA_KERNEL_SIZE": (6, 6),
+            "BG_KERNEL_SIZE": (8, 8),
+            "DILATE_ITERATIONS": 20,
+            "BIN_THRESHOLD": 0.6,
+            "input_size": (500, 500),
         }
 
-        cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train/"
-        mask_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train_GT/SEG/"
+        cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset2/train/"
+        mask_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset2/train_GT/SEG/"
         module_save_dir = "D:/Machine_Learning/Codes/CellSegment/save/"
-        tmp_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/_tmp/"
+        tmp_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset2/_tmp/"
 
+        model_path = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200614223438epoch-240.pth"
         valid_rate = 0.1
         use_cuda = True
+        use_exist_dataset = True
 
         trainer = Trainer()
         trainer.setup(cell_dir=cell_dir,
                       mask_dir=mask_dir,
                       module_save_dir=module_save_dir,
                       tmp_dir=tmp_dir,
+                      model_path=model_path,
                       valid_rate=valid_rate,
                       hyper_params=hyper_parameters,
-                      use_cuda=use_cuda)
+                      use_cuda=use_cuda,
+                      FREEZE_PARAM=True,
+                      use_exist_dataset=use_exist_dataset,
+                      PRETRAINED=True)
 
         trainer.train()
         trainer.save_module()
@@ -69,21 +80,21 @@ if __name__ == "__main__":
             use_exist_dataset = False
 
         else:
-            cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train/"
-            mask_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train_GT/SEG/"
-            tmp_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/_tmp/_test/"
-            exist_res_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/test_RES"
-            USE_EXIST_RES = False
+            cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset2/train/"
+            mask_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset2/train_GT/SEG/"
+            tmp_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset2/_tmp/_test/"
+            exist_res_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset2/test_RES"
             test_rate = 0.1
             use_exist_dataset = True
 
+            USE_EXIST_RES = False
             use_cuda = True
             TTA = False
-            SHOW_PIC = False
+            SHOW_PIC = True
 
         for e in range(50, 100, 50):
 
-            module_path = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200524epoch-2000.pth"
+            module_path = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200614215315epoch-20.pth"
 
             tester = Tester(
                 module_path=module_path,
@@ -117,9 +128,9 @@ if __name__ == "__main__":
             "DILATE_ITERATIONS": 10,
             "BIN_THRESHOLD": 0.6,
         }
-        cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/test/"
-        model_path = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200524epoch-2000.pth"
-        save_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/test_RES/"
+        cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset2/test/"
+        model_path = "D:/Machine_Learning/Codes/CellSegment/save/unet-20200614225110epoch-360.pth"
+        save_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset2/test_RES/"
         use_cuda = True
         TTA = False
 

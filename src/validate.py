@@ -3,7 +3,6 @@ import torch
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy
 import torchvision.transforms as T
 
 
@@ -32,8 +31,8 @@ class Validator():
 
     def validate(self, SHOW_PIC=False, TTA=False):
 
-        width_out = 628
-        height_out = 628
+        width_out = 500
+        height_out = 500
 
         TTA_KERNEL_SIZE = self.hyper_params["TTA_KERNEL_SIZE"]
         BG_KERNEL_SIZE = self.hyper_params["BG_KERNEL_SIZE"]
@@ -153,7 +152,8 @@ class Validator():
                                                    DILATE_ITERATIONS=DILATE_ITERATIONS)
 
                 """Calculate jaccard score"""
-                for j in range(batch_size):
+                for j in range(b_val_y.shape[0]):
+
                     j_score = self.calc_jaccard(
                         b_val_y[j], b_predict_y[j], use_cuda=self.use_cuda)
                     j_scores.append(j_score)

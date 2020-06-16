@@ -8,7 +8,6 @@ from predict import Predictor
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", "-m", default="Train")
-    parser.add_argument("--stage", "-s", default="S1")
     args = parser.parse_args()
     return args
 
@@ -26,6 +25,7 @@ if __name__ == "__main__":
             "epochs": 1,
             "epoch_lapse": 1,
             "epoch_save": 50,
+            "input_size": (628, 628),
         }
 
         cell_dir = "D:/Machine_Learning/Codes/CellSegment/supplementary/dataset1/train/"
@@ -43,7 +43,8 @@ if __name__ == "__main__":
                       tmp_dir=tmp_dir,
                       valid_rate=valid_rate,
                       hyper_params=hyper_parameters,
-                      use_cuda=use_cuda)
+                      use_cuda=use_cuda,
+                      PRETRAINED=False)
 
         trainer.train()
         trainer.save_module()
